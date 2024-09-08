@@ -1,0 +1,50 @@
+*enhanced by chatgpt*
+// load in chirps dataset and define the dates
+var dataset = ee.ImageCollection('UCSB-CHG/CHIRPS/DAILY')
+                  .filter(ee.Filter.date('2016-01-01', '2024-12-31'));
+
+// Precipitation label
+var precipitation = dataset.select('precipitation');
+
+// Area of interest (israel)
+var israelRegion = ee.FeatureCollection('projects/ee-ecoshawky/assets/Clipped_Israel_Croplands_Vector');
+
+// define monthyl precipitation, reduce to single value in the region.
+var monthlyPrecipitation = ee.FeatureCollection(
+  ee.List.sequence(2016, 2024).map(function(year) {
+    return ee.List.sequence(1, 12).map(function(month) {
+      var startDate = ee.Date.fromYMD(year, month, 1);
+      var endDate = startDate.advance(1, 'month');
+      
+      var monthly = precipitation.filterDate(startDate, endDate)
+                                 .sum()
+                                 .reduceRegion({
+                                   reducer: ee.Reducer.mean(),  // Calculate the mean rainfall over the region
+                                   geometry: israelRegion,
+                                   scale: 5000,
+                                   maxPixels: 1e9
+                                 });
+      
+      var precipitationValue = ee.Algorithms.If(
+        monthly.contains('precipitation'), 
+        ee.Number(monthly.get('precipitation')), 
+        ee.Number(0)
+      );
+      
+      return ee.Feature(null, {
+        'month': startDate.format('YYYY-MM'),
+        'precipitation': precipitationValue
+      });
+    });
+  }).flatten()
+);
+
+// Move precipitation to console to download later
+print('Monthly Precipitation Collection', monthlyPrecipitation);
+
+// Export to CSV for data storage
+Export.table.toDrive({
+  collection: monthlyPrecipitation,
+  description: 'Israel_Monthly_Precipitation_2016_2024',
+  fileFormat: 'CSV'
+});
