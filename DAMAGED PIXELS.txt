@@ -1,0 +1,46 @@
+*enhanced by chatgpt*
+import os
+import rasterio
+import numpy as np
+
+# Locate the bands
+bands_dir = r"C:\Local Data\ss1647\Dissertation - Copy - Copy\Clipped_bands_weekly"
+
+# NDVI calculations, numpy
+def calculate_ndvi(band4, band8):
+    with np.errstate(divide='ignore', invalid='ignore'):
+        ndvi = np.where((band8 + band4) == 0, np.nan, (band8 - band4) / (band8 + band4))
+    return ndvi
+
+# NDVI arrays for the calcing overlal sum and count, to fix negative values
+historical_ndvi_sum = None
+historical_ndvi_count = 0
+current_ndvi_sum = None
+current_ndvi_count = 0
+
+# Loop NDVI values, calc NDVI 
+for filename in os.listdir(bands_dir):
+    if filename.endswith("_B4.tif"):
+        date = filename.split("_")[0]  # Extract date
+        year, month, day = map(int, date.split("-"))
+
+        # Only consider October through July to compare to war measurements
+        if 10 <= month <= 12 or 1 <= month <= 7: 
+            band4_path = os.path.join(bands_dir, filename)
+            band8_path = band4_path.replace("_B4.tif", "_B8.tif")
+
+            with rasterio.open(band4_path) as src4, rasterio.open(band8_path) as src8:
+                # Calculate NDVI for the entire raster datasets held
+                band4 = src4.read(1)
+                band8 = src8.read(1)
+                ndvi = calculate_ndvi(band4, band8)
+
+# Calculate the average NDVI for the historical and current periods
+historical_avg_ndvi = historical_ndvi_sum / historical_ndvi_count
+current_avg_ndvi = current_ndvi_sum / current_ndvi_count
+
+# Identify NDVI decrease
+threshold = 0.1
+
+# Identify all damaged pixels
+damaged_pixels = np.where((historical_avg_ndvi - current_avg_ndvi) > threshold, 1, 0)
