@@ -1,0 +1,14 @@
+import rasterio
+import numpy as np
+
+# path to damaged pixel area
+raster_path = r'C:\Local Data\ss1647\Dissertation - Copy - Copy\Temp_Shapefiles\Israel\Damaged Pixels in Croplands XXXX.tif
+
+# choose raster file
+with rasterio.open(raster_path) as src:
+    raster_data = src.read(1)  # Read the first band
+
+    # count all damaged pixels (damaged pixels have values of 1)
+    damaged_pixel_count = np.sum(raster_data == 1)
+
+print(f"Number of damaged pixels: {damaged_pixel_count}")
