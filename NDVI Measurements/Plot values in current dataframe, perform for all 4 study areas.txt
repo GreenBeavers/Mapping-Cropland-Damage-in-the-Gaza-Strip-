@@ -1,0 +1,81 @@
+*enhanced by chatgpt* 
+import os
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+
+# align indices
+filtered_df = filtered_df.dropna(subset=['Avg_NDVI', 'precipitation'])
+filtered_df = filtered_df.copy()  # To avoid SettingWithCopyWarning
+
+# convert to data index
+if not isinstance(filtered_df.index, pd.DatetimeIndex):
+    filtered_df.index = pd.to_datetime(filtered_df.index)
+
+# align year with index
+filtered_df['Year'] = filtered_df.index.year
+
+# group up the data to filter ndvi peaks and determine average of ndvi peaks for period before war
+ndvi_peaks_2016_2023 = filtered_df[filtered_df['Year'] <= 2023].groupby('Year')['Avg_NDVI'].max()
+average_peak_2016_2023 = ndvi_peaks_2016_2023.mean()
+
+# Calculate the NDVI peak for 2024 (Wartime NDVI Peak)
+peak_2024 = filtered_df[filtered_df['Year'] == 2024]['Avg_NDVI'].max()
+
+# Calculate the NDVI peak for 2023 (Drought NDVI Peak)
+peak_2023 = filtered_df[filtered_df['Year'] == 2023]['Avg_NDVI'].max()
+
+# Create the output directory if it doesn't exist
+output_plot_dir = r'C:\Local Data\ss1647\Dissertation - Copy - Copy\Figures\Gaza City\with rainfall'
+os.makedirs(output_plot_dir, exist_ok=True)
+
+# plot ndvi and rainfall for whole study period
+fig, ax1 = plt.subplots(figsize=(14, 8))
+
+ax1.set_xlabel('Date')
+ax1.set_ylabel('Mean NDVI', color='darkgreen')
+ax1.plot(filtered_df.index, filtered_df['Avg_NDVI'], color='darkgreen', label='Mean NDVI', marker='o')
+ax1.set_ylim(0, 0.55)  # Set consistent y-axis limits for NDVI with max limit of 0.55
+ax1.set_yticks([i * 0.05 for i in range(12)])  # Set NDVI y-axis increments to 0.05
+ax1.tick_params(axis='y', labelcolor='darkgreen')
+
+ax2 = ax1.twinx() 
+ax2.set_ylabel('Rainfall (mm)', color='blue')
+ax2.plot(filtered_df.index, filtered_df['precipitation'], color='blue', label='Rainfall', marker='x')
+ax2.set_ylim(0, filtered_df['precipitation'].max() * 1.1)  # Set consistent y-axis limits for Rainfall
+ax2.tick_params(axis='y', labelcolor='blue')
+
+# highlight the war period (October 2023 to June 2024) with a transparent red box
+highlight_start_war = pd.to_datetime('2023-10-01')
+highlight_end_war = pd.to_datetime('2024-06-30')
+ax1.axvspan(highlight_start_war, highlight_end_war, color='red', alpha=0.3, label='War Period')
+
+# highlight the drought year period based on harvest season (October 2022 to September 2023) with a transparent orange box
+highlight_start_drought = pd.to_datetime('2022-10-01')
+highlight_end_drought = pd.to_datetime('2023-09-30')
+ax1.axvspan(highlight_start_drought, highlight_end_drought, color='orange', alpha=0.3, label='Drought Year')
+
+# add a label to highlight the areas (drought year, war period)
+ax1.text(pd.to_datetime('2024-03-01'), 0.5, 'War Period', color='red', fontsize=12, ha='center')
+ax1.text(pd.to_datetime('2023-04-01'), 0.48, 'Drought Year', color='orange', fontsize=12, ha='center')
+
+# Add indicator lines for peak values (e.g. NDVI peak during war period)
+avg_ndvi_line = ax1.axhline(y=average_peak_2016_2023, color='darkgreen', linestyle=':', linewidth=1.5, label=f'Pre-war Average NDVI Peak = {average_peak_2016_2023:.2f}')
+wartime_ndvi_line = ax1.axhline(y=peak_2024, color='red', linestyle='--', linewidth=2, label=f'Wartime NDVI Peak = {peak_2024:.2f}')
+drought_ndvi_line = ax1.axhline(y=peak_2023, color='orange', linestyle='--', linewidth=2, label=f'Drought NDVI Peak = {peak_2023:.2f}')
+
+# add legend, including the lines to for indicators (e.g. drought year peak)
+plt.legend(handles=[ndvi_patch, rainfall_patch, war_period_patch, drought_year_patch, avg_ndvi_line, wartime_ndvi_line, drought_ndvi_line], loc='upper left')
+
+# change legend design
+ndvi_patch = mpatches.Patch(color='darkgreen', label='NDVI (Mean)')
+rainfall_patch = mpatches.Patch(color='blue', label='Rainfall (mm)')
+war_period_patch = mpatches.Patch(color='red', alpha=0.3, label='War Period')
+drought_year_patch = mpatches.Patch(color='orange', alpha=0.3, label='Drought Year')
+
+plt.title('Gaza City Monthly NDVI Average and Rainfall (2016-2024)')
+plt.show()
+
+# save plot to file
+output_plot_path = os.path.join(output_plot_dir, 'Monthly NDVI Average and Rainfall Overall.png')
+plt.savefig(output_plot_path, bbox_inches='tight')
+print(f"Overall plot for Gaza City (with war period and drought year highlights, horizontal lines, and legend) saved to {output_plot_path}")
