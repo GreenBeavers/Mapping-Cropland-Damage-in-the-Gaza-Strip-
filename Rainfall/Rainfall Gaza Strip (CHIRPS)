@@ -1,3 +1,4 @@
+*enhanced by chatgpt*
 // load in chirps dataset and define the dates
 var dataset = ee.ImageCollection('UCSB-CHG/CHIRPS/DAILY')
                   .filter(ee.Filter.date('2016-01-01', '2024-12-31'));
