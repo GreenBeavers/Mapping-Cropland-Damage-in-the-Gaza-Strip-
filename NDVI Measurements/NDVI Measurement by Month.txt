@@ -1,0 +1,120 @@
+*enhanced by chatgpt* # -*- coding: utf-8 -*-
+"""
+Created on Fri Aug 16 19:11:34 2024
+
+@author: ss1647
+"""
+
+import os
+import glob
+import numpy as np
+import rasterio
+import matplotlib.pyplot as plt
+from datetime import datetime
+import pandas as pd
+
+# locate ndvi bands
+ndvi_bands_israel_dir = r'C:\Local Data\ss1647\Dissertation - Copy - Copy\Downloaded_bands_weekly_Israel\NDVI_Bands_Israel'
+output_dir = r'C:\Local Data\ss1647\Dissertation - Copy - Copy\NDVI_Analysis_Results_Monthly'
+
+# list the raster ndvi bands
+all_files = sorted(glob.glob(os.path.join(ndvi_bands_israel_dir, '*.tif')))
+
+# define ndvi band4 and 8 styles
+band_files = {}
+for file_path in all_files:
+    filename = os.path.basename(file_path)
+    date, band, _ = filename.split('_')
+    
+    if date not in band_files:
+        band_files[date] = {}
+    
+    if 'B4' in band:
+        band_files[date]['B4'] = file_path
+    elif 'B8' in band:
+        band_files[date]['B8'] = file_path
+
+print(f"Identified {len(band_files)} unique dates with potential Band 4 and Band 8 pairs.")
+
+# calculate ndvi and make nan values impossible to read
+def calculate_ndvi(red, nir):
+    ndvi = (nir - red) / (nir + red)
+    ndvi[np.isnan(ndvi)] = -9999  # Set NDVI to -9999 where calculation is not possible (e.g., division by zero)
+    return ndvi
+
+# store ndvi values
+monthly_ndvi = {}
+
+# process bands
+for date, bands in band_files.items():
+    if 'B4' in bands and 'B8' in bands:
+        try:
+            red_path = bands['B4']
+            nir_path = bands['B8']
+            print(f"Processing {red_path} and {nir_path} for date {date}")
+
+            with rasterio.open(red_path) as red_src:
+                red = red_src.read(1).astype(float)
+                red_nodata = red_src.nodata
+
+            with rasterio.open(nir_path) as nir_src:
+                nir = nir_src.read(1).astype(float)
+                nir_nodata = nir_src.nodata
+
+            if red.shape != nir.shape:
+                print(f"Skipping {red_path} and {nir_path} due to shape mismatch")
+                continue
+
+            # Mask out no-data values in both bands
+            nodata_mask = (red == 0) | (nir == 0) | (red == red_nodata) | (nir == nir_nodata)
+            red = np.ma.masked_array(red, mask=nodata_mask)
+            nir = np.ma.masked_array(nir, mask=nodata_mask)
+
+            ndvi = calculate_ndvi(red, nir)
+
+            # Convert date string to datetime object
+            date_obj = datetime.strptime(date, '%Y-%m-%d')
+            month_str = date_obj.strftime('%Y-%m')
+
+            # Store the mean NDVI value for the month
+            mean_ndvi = np.mean(ndvi)
+            if month_str not in monthly_ndvi:
+                monthly_ndvi[month_str] = []
+            monthly_ndvi[month_str].append(mean_ndvi)
+
+            print(f"Mean NDVI for {date}: {mean_ndvi}")
+
+        except Exception as e:
+            print(f"Error processing {red_path} and {nir_path}: {e}")
+
+# calculate ndvi based on a monthly average across
+monthly_avg_ndvi = {month: np.mean(values) for month, values in monthly_ndvi.items()}
+
+# use pandas for data processing to create graphs
+df_monthly_ndvi = pd.DataFrame(list(monthly_avg_ndvi.items()), columns=['Month', 'NDVI'])
+df_monthly_ndvi['Month'] = pd.to_datetime(df_monthly_ndvi['Month'])
+df_monthly_ndvi = df_monthly_ndvi.sort_values('Month')
+
+# plot ndvi measurement by month
+plt.figure(figsize=(14, 7))
+plt.plot(df_monthly_ndvi['Month'], df_monthly_ndvi['NDVI'], marker='o', linestyle='-', color='blue')
+
+# axis labels/title
+plt.title('Average Monthly NDVI for Israel Region (2016-2024)')
+plt.xlabel('Month')
+plt.ylabel('Average NDVI')
+
+# set x axis intervals
+plt.gca().xaxis.set_major_locator(plt.MultipleLocator(365.25 / 12))  # Major ticks for each month
+plt.gca().xaxis.set_minor_locator(plt.MultipleLocator(91.3125))  # Minor ticks for every 3 months
+plt.grid(True, which='both', linestyle='--', linewidth=0.5)
+
+# make y axis data labels sideways
+plt.gcf().autofmt_xdate()
+
+# save plot to file
+plot_output_path = os.path.join(output_dir, 'NDVI_Monthly_Average_Time_Series.png')
+plt.savefig(plot_output_path, bbox_inches='tight')
+plt.show()
+
+print(f"Monthly average NDVI time series plot saved to {plot_output_path}")
